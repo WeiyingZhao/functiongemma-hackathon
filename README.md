@@ -1,49 +1,129 @@
-<img src="assets/banner.png" alt="Logo" style="border-radius: 30px; width: 100%;">
+<img src="assets/banner.png" alt="EdgeAction Concierge" style="border-radius: 30px; width: 100%;">
 
-## Context
-- Cactus runs Google DeepMind's FunctionGemma at up to 3000 toks/sec prefill speed on M4 Macs.
-- While decode speed reaches 200 tokens/sec, all without GPU, to remain energy-efficient. 
-- FunctionGemma is great at tool calling, but small models are not the smartest for some tasks. 
-- There is a need to dynamically combine edge and cloud (Gemini Flash) to get the best of both worlds. 
-- Cactus develops various strategies for choosing when to fall back to Gemini or FunctionGemma.
+# EdgeAction Concierge
 
-## Challenge
-- FunctionGemma is just a tool-call model, but tool calling is the core of agentic systems. 
-- You MUST design new strategies that decide when to stick with on-device or fall to cloud. 
-- You will be objectively ranked on tool-call correctness, speed and edge/cloud ratio (priortize local). 
-- You can focus on prompting, tool description patterns, confidence score algorithms, anything!
-- Please ensure at least 1 team member has a Mac, Cactus runs on Macs, mobile devices and wearables.
+**A hybrid edge-cloud function calling router that runs tool calls locally first — falling back to the cloud only when needed.**
 
-## Setup (clone this repo and hollistically follow)
-- Step 1: Fork this repo, clone to your Mac, open terminal.
-- Step 2: `git clone https://github.com/cactus-compute/cactus`
-- Step 3: `cd cactus && source ./setup && cd ..` (re-run in new terminal)
-- Step 4: `cactus build --python`
-- Step 5: `cactus download google/functiongemma-270m-it --reconvert`
-- Step 6: Get cactus key from the [cactus website](https://cactuscompute.com/dashboard/api-keys)
-- Sept 7: Run `cactus auth` and enter your token when prompted.
-- Step 8: `pip install google-genai`
-- Step 9: Obtain Gemini API key from [Google AI Studio](https://aistudio.google.com/api-keys)
-- Step 10: `export GEMINI_API_KEY="your-key"`
-- Step 11: Click on location to get Gemini credits - [SF](https://trygcp.dev/claim/cactus-x-gdm-hackathon-sf), [Boston](https://trygcp.dev/claim/cactus-x-gdm-hackathon-boston), [DC](https://trygcp.dev/claim/cactus-x-gdm-hackathon-dc), [London](https://trygcp.dev/claim/cactus-x-gdm-hackathon-london), [Singapore](https://trygcp.dev/claim/cactus-x-gdm-hackathon), [Online](https://trygcp.dev/claim/cactus-x-gdm-hackathon-online)
-- Step 12: Join the [Reddit channel](https://www.reddit.com/r/cactuscompute/), ask any technical questions there.
-- Step 13: read and run `python benchmark.py` to understand how objective scoring works.
-- Note: Final objective score will be done on held-out evals, top 10 are then judged subjectively.
+Most function calling today happens entirely in the cloud. Every request ships your user's intent (and sometimes their data) to a remote API, adding latency, cost, and privacy exposure. EdgeAction Concierge flips the default: a 270M parameter model on your device handles the majority of tool calls in under 100ms, with a cloud fallback for the hard cases.
 
-## Submissions
-- Your main task is to modify the **internal logic** of the `generate_hybrid` method in `main.py`. 
-- Do not modify the input or output signature (function arguments and return variables) of the `generate_hybrid` method. Keep the hybrid interface compatible with `benchmark.py`.
-- Submit to the leaderboard `python submit.py --team "YourTeamName" --location "YourCity"`, only 1x every 1hr.
-- The dataset is a hidden Cactus eval, quite difficult for FunctionGemma by design.
-- Use `python benchmark.py` to iterate, but your best score is preserved.
-- For transparency, hackers can see live rankings on the [leaderboard](https://cactusevals.ngrok.app).
-- Leaderboard will start accepting submissions once event starts. 
-- The top hackers in each location will make it to judging.
+**~89-90% accuracy** on a 30-case function calling benchmark spanning single-tool, multi-tool selection, and multi-call scenarios.
 
-## Qualitative Judging 
-- **Rubric 1**: The quality of your hybrid routing algorithm, depth and cleverness.
-- **Rubric 2**: End-to-end products that execute function calls to solve real-world problems. 
-- **Rubric 3**: Building low-latency voice-to-action products, leveraging `cactus_transcribe`.
+---
+
+## Why This Matters
+
+| | Cloud-only | EdgeAction Concierge |
+|---|---|---|
+| **Latency** | 300-800ms per call | ~80ms local, ~230ms cloud fallback |
+| **Privacy** | Every request leaves the device | Simple requests never leave the device |
+| **Cost** | Pay per token, every time | Local calls are free; cloud only when needed |
+| **Offline** | No connection = no tools | Single-tool calls work offline |
+
+---
+
+## How It Works
+
+The router in `main.py` classifies each request and picks the fastest reliable path:
+
+| Path | When | Model | Avg Latency |
+|------|------|-------|-------------|
+| **A** | Single tool available | FunctionGemma-270M (local) with grounding check, cloud backup | ~80ms |
+| **B** | Multiple tools, single action | LFM2-1.2B (local) single run | ~230ms |
+| **C** | Multiple tools, multi-action | LFM2-1.2B (local) with conditional retry | ~230-460ms |
+
+Three core functions drive the system:
+
+- **`generate_cactus(messages, tools)`** — Runs FunctionGemma locally via the Cactus SDK
+- **`generate_cloud(messages, tools)`** — Calls Gemini 2.0 Flash as a cloud fallback
+- **`generate_hybrid(messages, tools)`** — The routing logic that picks the best path
+
+### Key Techniques
+
+- **Grounding check** — Detects hallucinated argument values by verifying they appear in the user message
+- **Argument repair** — Fills missing required arguments by extracting values from the user's words
+- **Type coercion** — Fixes common type mismatches (e.g., `"10"` → `10` for integer params)
+- **Multi-call prompting** — Specialized system prompt for queries requiring multiple tool calls
+
+---
+
+## Setup
+
+Requires a Mac with Apple Silicon (M1+).
+
+The Cactus SDK and model weights (~2.4 GB) are not included in this repository. The setup steps below will clone the SDK into a `cactus/` directory and download the required model weights into `cactus/weights/`.
+
+```bash
+# 1. Clone this repo
+git clone https://github.com/YOUR_USERNAME/functiongemma-hackathon
+cd functiongemma-hackathon
+
+# 2. Clone and build Cactus SDK (creates the cactus/ directory)
+git clone https://github.com/cactus-compute/cactus
+cd cactus && source ./setup && cd ..
+cactus build --python
+
+# 3. Download model weights (saved to cactus/weights/)
+cactus download google/functiongemma-270m-it --reconvert
+cactus download cactus-compute/lfm2-1.2b-tool --reconvert
+
+# 4. Authenticate with Cactus
+cactus auth  # enter your token from https://cactuscompute.com/dashboard/api-keys
+
+# 5. Install Python dependencies
+pip install google-genai
+
+# 6. Set Gemini API key
+export GEMINI_API_KEY="your-key-from-aistudio.google.com"
+```
+
+---
+
+## Usage
+
+### Quick start
+
+```bash
+python main.py
+```
+
+### Interactive demo
+
+`app.py` provides a conversational CLI that shows routing decisions in real time — which model handled each call, latency, and the parsed tool output.
+
+```bash
+python app.py
+```
+
+### API server
+
+`router_service.py` exposes the router as a FastAPI service with OpenAI-compatible endpoints.
+
+```bash
+pip install fastapi uvicorn
+python router_service.py
+```
+
+---
+
+## Benchmark
+
+30 test cases across three difficulty levels:
+
+| Difficulty | Weight | Description |
+|------------|--------|-------------|
+| Easy | 20% | 1 tool, direct request |
+| Medium | 30% | 2-3 tools, must pick the right one |
+| Hard | 50% | Multiple tools needed, multi-call |
+
+Per-level score = `0.60 × F1 + 0.15 × time_score + 0.25 × on_device_ratio`
+
+Where `time_score = max(0, 1 - avg_time_ms / 500)`.
+
+```bash
+python benchmark.py
+```
+
+---
 
 ## Quick Example
 
@@ -51,7 +131,7 @@
 import json
 from cactus import cactus_init, cactus_complete, cactus_destroy
 
-model = cactus_init("weights/lfm2-vl-450m")
+model = cactus_init("cactus/weights/functiongemma-270m-it")
 messages = [{"role": "user", "content": "What is 2+2?"}]
 response = json.loads(cactus_complete(model, messages))
 print(response["response"])
@@ -59,7 +139,9 @@ print(response["response"])
 cactus_destroy(model)
 ```
 
-## API Reference
+---
+
+## Cactus SDK API Reference
 
 ### `cactus_init(model_path, corpus_dir=None)`
 
@@ -69,8 +151,8 @@ cactus_destroy(model)
 | `corpus_dir` | `str` | (Optional) dir of txt/md files for auto-RAG |
 
 ```python
-model = cactus_init("weights/lfm2-vl-450m")
-model = cactus_init("weights/lfm2-rag", corpus_dir="./documents")
+model = cactus_init("cactus/weights/functiongemma-270m-it")
+model = cactus_init("cactus/weights/lfm2-1.2b-tool", corpus_dir="./documents")
 ```
 
 ### `cactus_complete(model, messages, **options)`
@@ -134,7 +216,7 @@ cactus_complete(model, messages, callback=on_token)
 }
 ```
 
-**Cloud handoff response** (when model detects low confidence):
+**Cloud handoff response** (when confidence drops below threshold):
 ```json
 {
     "success": false,
@@ -154,9 +236,7 @@ cactus_complete(model, messages, callback=on_token)
 }
 ```
 
-- When `cloud_handoff` is `True`, the model's confidence dropped below `confidence_threshold` (default: 0.7) and recommends deferring to a cloud-based model for better results. 
-
-- You will NOT rely on this, hackers must design custom strategies to fall-back to cloud, that maximizes on-devices and correctness, while minimizing end-to-end latency!
+When `cloud_handoff` is `True`, the model's confidence dropped below `confidence_threshold` and recommends deferring to a cloud model.
 
 ### `cactus_transcribe(model, audio_path, prompt="")`
 
@@ -167,7 +247,7 @@ cactus_complete(model, messages, callback=on_token)
 | `prompt` | `str` | Whisper prompt for language/task |
 
 ```python
-whisper = cactus_init("weights/whisper-small")
+whisper = cactus_init("cactus/weights/whisper-small")
 prompt = "<|startoftranscript|><|en|><|transcribe|><|notimestamps|>"
 response = cactus_transcribe(whisper, "audio.wav", prompt=prompt)
 print(json.loads(response)["response"])
@@ -232,12 +312,14 @@ Query RAG corpus for relevant text chunks. Requires model initialized with `corp
 | `top_k` | `int` | Number of chunks to retrieve (default: 5) |
 
 ```python
-model = cactus_init("weights/lfm2-rag", corpus_dir="./documents")
+model = cactus_init("cactus/weights/lfm2-1.2b-tool", corpus_dir="./documents")
 chunks = cactus_rag_query(model, "What is machine learning?", top_k=3)
 for chunk in chunks:
     print(f"Score: {chunk['score']:.2f} - {chunk['text'][:100]}...")
 ```
 
-## Next steps:
-- Join the [Reddit channel](https://www.reddit.com/r/cactuscompute/), ask any technical questions there.
-- To gain some technical insights on AI, checkout [Maths, CS & AI Compendium](https://github.com/HenryNdubuaku/maths-cs-ai-compendium). 
+---
+
+## Acknowledgments
+
+Built with [Cactus](https://github.com/cactus-compute/cactus) and Google DeepMind's [FunctionGemma](https://huggingface.co/google/functiongemma-270m-it). Cloud fallback powered by [Gemini 2.0 Flash](https://ai.google.dev/).

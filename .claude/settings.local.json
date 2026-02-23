@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /Users/johnwei77/Documents/GitHub/functiongemma-hackathon ls-files --others --ignored --exclude-standard --directory)"
+    ]
+  }
+}

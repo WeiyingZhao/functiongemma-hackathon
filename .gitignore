@@ -207,9 +207,3 @@ marimo/_lsp/
 __marimo__/
 
 cactus
-
-# Eval server (contains held-out evals, scoring, and uploads)
-server/
-
-# Leaderboard data
-docs/
