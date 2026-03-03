@@ -1,5 +1,3 @@
-<img src="assets/banner.png" alt="EdgeAction Concierge" style="border-radius: 30px; width: 100%;">
-
 # EdgeAction Concierge
 
 **A hybrid edge-cloud function calling router that runs tool calls locally first — falling back to the cloud only when needed.**
@@ -7,6 +5,9 @@
 Most function calling today happens entirely in the cloud. Every request ships your user's intent (and sometimes their data) to a remote API, adding latency, cost, and privacy exposure. EdgeAction Concierge flips the default: a 270M parameter model on your device handles the majority of tool calls in under 100ms, with a cloud fallback for the hard cases.
 
 **~89-90% accuracy** on a 30-case function calling benchmark spanning single-tool, multi-tool selection, and multi-call scenarios.
+
+<img src="assets/banner.png" alt="EdgeAction Concierge" style="border-radius: 30px; width: 100%;">
+
 
 ---
 
